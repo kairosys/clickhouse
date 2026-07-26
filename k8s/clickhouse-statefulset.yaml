@@ -1,0 +1,70 @@
+---
+# k8s/clickhouse-statefulset.yaml — headless Service (HTTP+native) + single-node ClickHouse StatefulSet.
+# Namespace furseal, hostPath mount at /var/lib/clickhouse. DB override CLICKHOUSE_DB=langfuse for Langfuse v3.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: furseal
+  labels:
+    app: clickhouse
+spec:
+  clusterIP: None
+  ports:
+    - port: 8123
+      targetPort: 8123
+      name: http
+    - port: 9000
+      targetPort: 9000
+      name: native
+  selector:
+    app: clickhouse
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: furseal
+  labels:
+    app: clickhouse
+spec:
+  serviceName: "clickhouse"
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:latest
+          ports:
+          - containerPort: 8123
+            name: http
+          - containerPort: 9000
+            name: native
+          envFrom:
+          - secretRef:
+              name: clickhouse-secret
+          env:
+          - name: CLICKHOUSE_DB
+            value: "langfuse"
+          resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1024Mi"
+          volumeMounts:
+          - name: clickhouse-data
+            mountPath: /var/lib/clickhouse
+      volumes:
+        - name: clickhouse-data
+          hostPath:
+            path: /mnt/workspaces/clickhouse/data
+            type: DirectoryOrCreate
