@@ -9,7 +9,7 @@ This directory contains configuration + runtime data only (no source code or tes
 ---
 
 ## Overview
-ClickHouse is deployed as a Kubernetes `StatefulSet` named `clickhouse` with an attached headless Service of the same name (namespace `furseal`). Every object hard-codes `furseal`, so DNS names resolve like `<pod>.clickhouse.furseal.svc.cluster.local`. The instance exposes one database (`CLICKHOUSE_DB=langfuse`) and listens on two ports consumed by Langfuse's HTTP/REST API (8123) and its native client migration protocol (9000). Storage is local to the worker node via a hostPath mount so data survives pod restarts.
+ClickHouse is deployed as a Kubernetes `StatefulSet` named `clickhouse` with an attached headless Service of the same name (namespace `default`). DNS names resolve like `<pod>.clickhouse.default.svc.cluster.local`. The instance exposes one database (`CLICKHOUSE_DB=langfuse`) and listens on two ports consumed by Langfuse's HTTP/REST API (8123) and its native client migration protocol (9000). Storage is local to the worker node via a hostPath mount so data survives pod restarts.
 
 ---
 
@@ -47,7 +47,7 @@ No feature-gate env var is declared. This instance effectively runs single-node,
 ---
 
 ## Configuration & Environment Variables
-Declared across `k8s/clickhouse-secret.yaml` (surfaced into the Pod via `envFrom`) and an explicit override in the container env block of `k8s/clickhouse-statefulset.yaml`. Because credentials are checked in as plaintext under Git, assume compromised and **rotate before any push** — nothing in `.gitignore` excludes them by content. Namespace is hard-coded to `furseal`; change explicitly on each object if deploying elsewhere.
+Declared across `k8s/clickhouse-secret.yaml` (surfaced into the Pod via `envFrom`) and an explicit override in the container env block of `k8s/clickhouse-statefulset.yaml`. Because credentials are checked in as plaintext under Git, assume compromised and **rotate before any push** — nothing in `.gitignore` excludes them by content. Namespace is `default`.
 
 | Variable               | Source                | Default value / effect              | Notes |
 |-----------------------|----------------------|-------------------------------------|---------------------------------------------------------------|
@@ -57,23 +57,20 @@ Declared across `k8s/clickhouse-secret.yaml` (surfaced into the Pod via `envFrom
 
 ---
 
-## Deployment Guide (namespace: furseal)
-Apply in dependency order so later objects can resolve their references. All manifests hard-code namespace `furseal`; it must exist before applying the Secret/Service/StatefulSet, and `/mnt/workspaces/clickhouse/data` should be present on each target node — otherwise ClickHouse starts empty.
+## Deployment Guide
+Apply in dependency order so later objects can resolve their references. All manifests use the `default` namespace. The host path `/mnt/workspaces/clickhouse/data` should be present on each target node — otherwise ClickHouse starts empty.
 
 ```bash
-# 1) Namespace (hard-coded in every manifest below)
-kubectl get ns   furseal || kubectl create ns      furseal
+# 1) Secret first -> auth must exist before Pod envFrom resolves, else a restart may be required to pick it up
+kubectl apply -f k8s/clickhouse-secret.yaml
 
-# 2) Secret first -> auth must exist before Pod envFrom resolves, else a restart may be required to pick it up
-kubectl -n furseal apply     f k8s/clickhouse-secret.yaml
-
-# 3) Headless Service + StatefulSet (single YAML under --- separator creates both objects)
-kubectl -n furseal apply   -f k8s/clickhouse-statefulset.yaml && \
- kubectl -ns               wait    --for=jsonpath='{.items[0].ready}' pod -l app=clickhouse && \
- kubectl get                svc,sts,po -n furseal
+# 2) Headless Service + StatefulSet (single YAML under --- separator creates both objects)
+kubectl apply -f k8s/clickhouse-statefulset.yaml && \
+ kubectl wait    --for=jsonpath='{.items[0].ready}' pod -l app=clickhouse && \
+ kubectl get                svc,sts,po
 
 # (optional) Port-forward the headless Service to localhost for local HTTP diagnostics:
-kubectl -n furseal port-forward svc/clickhouse 8123 &>/dev/null & sleep 1; echo "ready"          \
+kubectl port-forward svc/clickhouse 8123 &>/dev/null & sleep 1; echo "ready"          \
 ```
 
 > Path quirk: this macOS-side working tree is at `/Users/kevin/Workspaces/clickhouse/data`; the pod instead mounts node-local hostPath `/mnt/workspaces/clickhouse/data`. Do not create a symlink here expecting it to map onto the cluster — paths resolve on the *node running the Pod*, not your filesystem.
@@ -83,25 +80,25 @@ kubectl -n furseal port-forward svc/clickhouse 8123 &>/dev/null & sleep 1; echo 
 ## Health Checks & Diagnostics
 ```bash
 # 1) Object + endpoint layout (single headless Service + single Replica StatefulSet)
-kubectl -n furseal get svc,sts,po -l app=clickhouse
+kubectl get svc,sts,po -l app=clickhouse
 kubectl    port-forward   svc/clickhouse 8123:8123
 
 # 2) HTTP liveness/readiness ping — "1" means healthy on the REST interface
 curl http://localhost:8123/ping
 
 # 3) Auth smoke via default user, against CLICKHOUSE_DB=langfuse (see Configuration table):
-PW=$(kubectl -ns furseal get secret clickhouse-secret -ojsonpath='{.stringData.CLICKHOUSE_PASSWORD}') && \
+PW=$(kubectl get secret clickhouse-secret -ojsonpath='{.stringData.CLICKHOUSE_PASSWORD}') && \
 curl --user "clickhouse:$PW" 'http://localhost:8123/?query=SELECT+version()'
 
 # 4) Schema verification against the live server (DDL source-of-truth mirrored at data/metadata/*.sql, read-only):
-kubectl -n furseal exec   ist ts/clickhouse -- clickhouse-client \
+kubectl exec sts/clickhouse -- clickhouse-client \
       "SHOW DATABASES; SHOW CREATE TABLE langfuse.traces LIMIT 1;"          # native TCP port 9000 aware
 
 # 5) Disk/inspection view the server itself reports (data dir footprint + per-disk free):
-kubectl -n furseal exec    sts/clickhouse -- clickhouse-client \
+kubectl exec sts/clickhouse -- clickhouse-client \
  "SELECT hostName(), path, formatReadableSize(sum(size_bytes)) AS bytes
    FROM system.parts GROUP BY hostName(), path;"
 
 # 6) In-pod filesystem inspection of the data root (does NOT replace a SQL read):
-kubectl -n furseal exec sts/clickhouse -- du        /var/lib/clickhouse | tail -1
+kubectl exec sts/clickhouse -- du        /var/lib/clickhouse | tail -1
 ```
