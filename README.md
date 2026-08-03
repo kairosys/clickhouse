@@ -107,7 +107,15 @@ kubectl exec sts/clickhouse -- clickhouse-client \
 Langfuse communicates with ClickHouse over the headless Service, which resolves to the single StatefulSet replica. Analytical data is written to a node-local hostPath volume mounted at `/var/lib/clickhouse`, so it survives pod restarts.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px'}}}%%
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'fontSize': '14px',
+    'darkMode': true,
+    'lineColor': '#8B949E',
+    'textColor': '#E6EDF3'
+  }
+}}%%
 graph LR
     A[Langfuse v3<br/>Client] -->|HTTP 8123 / native 9000| B[Headless Service<br/>clickhouse]
     B --> C[ClickHouse Server<br/>StatefulSet · 1 replica]
