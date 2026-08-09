@@ -39,16 +39,18 @@ spec:
         - name: clickhouse
           image: clickhouse/clickhouse-server:latest
           ports:
-          - containerPort: 8123
-            name: http
-          - containerPort: 9000
-            name: native
+            - containerPort: 8123
+              name: http
+            - containerPort: 9000
+              name: native
           envFrom:
-          - secretRef:
-              name: clickhouse-secret
+            - secretRef:
+                name: clickhouse-secret
           env:
-          - name: CLICKHOUSE_DB
-            value: "langfuse"
+            - name: TZ
+              value: "Asia/Hong_Kong"
+            - name: CLICKHOUSE_DB
+              value: "langfuse"
           resources:
             requests:
               cpu: "250m"
@@ -57,11 +59,11 @@ spec:
               cpu: "1"
               memory: "2Gi"
           volumeMounts:
-          - name: clickhouse-data
-            mountPath: /var/lib/clickhouse
-          - name: clickhouse-config
-            mountPath: /etc/clickhouse-server/config.d/memory-limits.xml
-            subPath: memory-limits.xml
+            - name: clickhouse-data
+              mountPath: /var/lib/clickhouse
+            - name: clickhouse-config
+              mountPath: /etc/clickhouse-server/config.d/memory-limits.xml
+              subPath: memory-limits.xml
       volumes:
         - name: clickhouse-data
           hostPath:

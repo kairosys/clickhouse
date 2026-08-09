@@ -149,6 +149,7 @@ Surfaced into the Pod from the `clickhouse-secret` Secret via `envFrom`, plus on
 | `CLICKHOUSE_USER` | Secret | `clickhouse` | Auth user the Langfuse stack connects as. |
 | `CLICKHOUSE_PASSWORD` | Secret | *(redacted)* | Plaintext `stringData` in `k8s/clickhouse-secret.yaml` (gitignored) — rotate before any push. |
 | `CLICKHOUSE_DB` | Pod env | `langfuse` | Default database in the manifest; the live schema resides in the `default` database (see [Usage](#usage)). |
+| `TZ` | Pod env | `Asia/Hong_Kong` | Container timezone for the ClickHouse server. |
 
 ### Server Overrides (ConfigMap)
 
