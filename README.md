@@ -3,7 +3,7 @@
 <p align="center">
   <strong>Analytical database for Langfuse v3, deployed as a single-node Kubernetes StatefulSet.</strong>
   <br />
-  <em>HTTP/REST 8123 · Native TCP 9000 · Atomic engine · hostPath persistent storage</em>
+  <em>HTTP 8123 · Native TCP 9000 · Atomic engine · hostPath persistent storage</em>
 </p>
 
 <p align="center">
@@ -12,18 +12,16 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License" /></a>
-  <a href="https://clickhouse.com"><img src="https://img.shields.io/badge/ClickHouse-FFCC00?style=flat&logo=clickhouse&logoColor=black" alt="ClickHouse" /></a>
-  <a href="https://kubernetes.io"><img src="https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white" alt="Kubernetes" /></a>
-  <a href="https://www.docker.com"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker" /></a>
-</p>
-
-<p align="center">
   <a href="https://docs.anthropic.com/en/docs/claude-code"><img src="https://img.shields.io/badge/Claude_Code-D97757?style=flat&logo=claude&logoColor=white" alt="Claude Code" /></a>
+  <a href="https://github.com/features/copilot"><img src="https://img.shields.io/badge/GitHub_Copilot-000000?style=flat&logo=github&logoColor=white" alt="GitHub Copilot" /></a>
   <a href="https://cursor.sh"><img src="https://img.shields.io/badge/Cursor-000000?style=flat&logo=cursor&logoColor=white" alt="Cursor" /></a>
 </p>
 
-ClickHouse is the analytical backend for the **Langfuse v3** self-hosted observability stack. It stores all analytical data — traces, observations, scores, and prompts — and runs as a Kubernetes `StatefulSet` with fixed DNS identity and local persistent storage. This repository contains configuration and runtime data only; there is no application source code or test suite.
+<p align="center">
+  <img src="https://img.shields.io/badge/ClickHouse-FFCC00?style=flat&logo=clickhouse&logoColor=black" alt="ClickHouse" />
+  <img src="https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white" alt="Kubernetes" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker" />
+</p>
 
 <!-- BEAUTIFIED -->
 
@@ -32,8 +30,8 @@ ClickHouse is the analytical backend for the **Langfuse v3** self-hosted observa
 ## Features
 
 - **Fixed DNS identity** — A headless Service of the same name resolves `<pod>.clickhouse.default.svc.cluster.local`, giving the rest of the stack a stable connection target.
-- **Two protocol surfaces** — HTTP/REST on `8123` for the Langfuse API, native TCP on `9000` for native clients and migration traffic.
-- **Persistent local storage** — Data lives on a node-local hostPath mount, so analytical data survives pod restarts and rescheduling.
+- **Two protocol surfaces** — HTTP on `8123` for the Langfuse API, native TCP on `9000` for native clients and migration traffic.
+- **Persistent local storage** — Data lives on a node-local hostPath mount (`/var/lib/clickhouse`), so analytical data survives pod restarts and rescheduling.
 - **Survivable updates** — RollingUpdate strategy with a single replica keeps the database reachable across image changes.
 - **Bounded resource footprint** — Requests of `250m` CPU / `512Mi` memory with limits of `1` CPU / `2Gi` memory.
 - **Override-ready server config** — A ConfigMap mounts `memory-limits.xml` into `/etc/clickhouse-server/config.d/` for engine tuning without editing the image.
@@ -56,12 +54,11 @@ kubectl apply -f k8s/clickhouse-secret.yaml
 ### Deploy the Service and StatefulSet
 
 ```bash
-kubectl apply -f k8s/clickhouse-statefulset.yaml && \
-kubectl wait --for=jsonpath='{.items[0].ready}' pod -l app=clickhouse && \
-kubectl get svc,sts,po
+kubectl apply -f k8s/clickhouse-statefulset.yaml
+kubectl wait --for=jsonpath='{.items[0].ready}' pod -l app=clickhouse
 ```
 
-### Verify Locally
+### Verify
 
 ```bash
 kubectl port-forward svc/clickhouse 8123 &>/dev/null & sleep 1
@@ -80,6 +77,8 @@ curl http://localhost:8123/ping
 
 ### Authenticated query (REST interface)
 
+The password lives in the `clickhouse-secret` Secret and is resolved at query time:
+
 ```bash
 PW=$(kubectl get secret clickhouse-secret -ojsonpath='{.stringData.CLICKHOUSE_PASSWORD}') && \
 curl --user "clickhouse:$PW" 'http://localhost:8123/?query=SELECT+version()'
@@ -89,7 +88,7 @@ curl --user "clickhouse:$PW" 'http://localhost:8123/?query=SELECT+version()'
 
 ```bash
 kubectl exec sts/clickhouse -- clickhouse-client \
-  "SHOW DATABASES; SHOW CREATE TABLE langfuse.traces LIMIT 1;"
+  "SHOW DATABASES; SHOW CREATE TABLE default.traces LIMIT 1;"
 ```
 
 ### Data directory footprint
@@ -99,6 +98,8 @@ kubectl exec sts/clickhouse -- clickhouse-client \
   "SELECT hostName(), path, formatReadableSize(sum(size_bytes)) AS bytes
    FROM system.parts GROUP BY hostName(), path;"
 ```
+
+> The manifest sets `CLICKHOUSE_DB=langfuse`, but the live schema (traces, observations, scores, analytics_*) resides in the `default` database. Query against `default.*` or verify the database name with `SHOW DATABASES` before writing SQL.
 
 ---
 
@@ -146,8 +147,8 @@ Surfaced into the Pod from the `clickhouse-secret` Secret via `envFrom`, plus on
 | Variable | Source | Default | Notes |
 |---|---|---|---|
 | `CLICKHOUSE_USER` | Secret | `clickhouse` | Auth user the Langfuse stack connects as. |
-| `CLICKHOUSE_PASSWORD` | Secret | *(redacted)* | Plaintext `stringData` in `k8s/clickhouse-secret.yaml` — rotate before any push. |
-| `CLICKHOUSE_DB` | Pod env | `langfuse` | Default database; schema DDL is mirrored in `data/metadata/default.sql`. |
+| `CLICKHOUSE_PASSWORD` | Secret | *(redacted)* | Plaintext `stringData` in `k8s/clickhouse-secret.yaml` (gitignored) — rotate before any push. |
+| `CLICKHOUSE_DB` | Pod env | `langfuse` | Default database in the manifest; the live schema resides in the `default` database (see [Usage](#usage)). |
 
 ### Server Overrides (ConfigMap)
 
@@ -173,14 +174,14 @@ The instance exposes the standard ClickHouse interfaces:
 
 ```
 clickhouse/
-├── k8s/                     # Kubernetes manifests (namespace: default)
-│   ├── clickhouse-secret.yaml        # Credentials, consumed via envFrom
-│   ├── clickhouse-config.yaml        # ConfigMap: memory-limits.xml override
+├── k8s/                       # Kubernetes manifests (namespace: default)
+│   ├── clickhouse-secret.yaml        # Credentials, gitignored
+│   ├── clickhouse-configmap.yaml     # ConfigMap: memory-limits.xml override
 │   └── clickhouse-statefulset.yaml   # Headless Service + StatefulSet (single YAML)
-├── data/                    # Live server state (gitignored, mirrors running pod)
-│   ├── metadata/            # DDL files (default.sql, system.sql)
+├── data/                      # Live server state (gitignored, mirrors running pod)
+│   ├── metadata/              # DDL files (default.sql, system.sql)
 │   ├── preprocessed_configs/  # Machine-merged server config
-│   └── status               # Runtime markers (PID, revision)
+│   └── status                 # Runtime markers (PID, revision)
 ├── README.md
 ├── LICENSE
 └── AGENTS.md
