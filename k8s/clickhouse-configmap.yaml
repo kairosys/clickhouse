@@ -5,6 +5,6 @@ metadata:
 data:
   memory-limits.xml: |
     <clickhouse>
-        <max_server_memory_usage>1073741824</max_server_memory_usage>
+        <max_server_memory_usage>1610612736</max_server_memory_usage>
         <mark_cache_size>134217728</mark_cache_size>
     </clickhouse>

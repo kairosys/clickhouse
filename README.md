@@ -33,7 +33,7 @@
 - **Two protocol surfaces** — HTTP on `8123` for the Langfuse API, native TCP on `9000` for native clients and migration traffic.
 - **Persistent local storage** — Data lives on a node-local hostPath mount (`/var/lib/clickhouse`), so analytical data survives pod restarts and rescheduling.
 - **Survivable updates** — RollingUpdate strategy with a single replica keeps the database reachable across image changes.
-- **Bounded resource footprint** — Requests of `250m` CPU / `1Gi` memory with limits of `1` CPU / `2Gi` memory.
+- **Bounded resource footprint** — Requests of `500m` CPU / `1Gi` memory with a `2Gi` memory limit and no CPU limit.
 - **Override-ready server config** — A ConfigMap mounts `memory-limits.xml` into `/etc/clickhouse-server/config.d/` for engine tuning without editing the image.
 
 ---
@@ -155,7 +155,7 @@ Surfaced into the Pod from the `clickhouse-secret` Secret via `envFrom`, plus on
 
 | Setting | Value | Effect |
 |---|---|---|
-| `max_server_memory_usage` | `1073741824` (1 GiB) | Caps total server memory usage. |
+| `max_server_memory_usage` | `1610612736` (1.5 GiB) | Caps total server memory usage. |
 | `mark_cache_size` | `134217728` (128 MiB) | Bounds the mark cache. |
 
 ---

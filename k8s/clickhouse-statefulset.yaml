@@ -43,6 +43,12 @@ spec:
               name: http
             - containerPort: 9000
               name: native
+          readinessProbe:
+            tcpSocket:
+              port: native
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
           envFrom:
             - secretRef:
                 name: clickhouse-secret
@@ -53,10 +59,9 @@ spec:
               value: "langfuse"
           resources:
             requests:
-              cpu: "250m"
+              cpu: "500m"
               memory: "1Gi"
             limits:
-              cpu: "1"
               memory: "2Gi"
           volumeMounts:
             - name: clickhouse-data
