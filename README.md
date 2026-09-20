@@ -33,7 +33,7 @@
 - **Two protocol surfaces** — HTTP on `8123` for the Langfuse API, native TCP on `9000` for native clients and migration traffic.
 - **Persistent local storage** — Data lives on a node-local hostPath mount (`/var/lib/clickhouse`), so analytical data survives pod restarts and rescheduling.
 - **Survivable updates** — RollingUpdate strategy with a single replica keeps the database reachable across image changes.
-- **Bounded resource footprint** — Requests of `250m` CPU / `512Mi` memory with limits of `1` CPU / `2Gi` memory.
+- **Bounded resource footprint** — Requests of `250m` CPU / `1Gi` memory with limits of `1` CPU / `2Gi` memory.
 - **Override-ready server config** — A ConfigMap mounts `memory-limits.xml` into `/etc/clickhouse-server/config.d/` for engine tuning without editing the image.
 
 ---
