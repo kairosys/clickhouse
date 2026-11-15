@@ -37,12 +37,20 @@ spec:
     spec:
       containers:
         - name: clickhouse
-          image: clickhouse/clickhouse-server:latest
+          image: clickhouse/clickhouse-server:26.10.4.207
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8123
               name: http
             - containerPort: 9000
               name: native
+          startupProbe:
+            tcpSocket:
+              port: native
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 48
           readinessProbe:
             tcpSocket:
               port: native
@@ -60,9 +68,9 @@ spec:
           resources:
             requests:
               cpu: "500m"
-              memory: "1Gi"
-            limits:
               memory: "2Gi"
+            limits:
+              memory: "4Gi"
           volumeMounts:
             - name: clickhouse-data
               mountPath: /var/lib/clickhouse

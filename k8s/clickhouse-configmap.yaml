@@ -5,6 +5,14 @@ metadata:
 data:
   memory-limits.xml: |
     <clickhouse>
-        <max_server_memory_usage>1610612736</max_server_memory_usage>
+        <logger>
+            <level>information</level>
+            <size>100M</size>
+            <count>3</count>
+        </logger>
+        <max_server_memory_usage>3221225472</max_server_memory_usage>
         <mark_cache_size>134217728</mark_cache_size>
+        <background_pool_size>8</background_pool_size>
+        <background_merges_mutations_concurrency_ratio>4</background_merges_mutations_concurrency_ratio>
+        <background_schedule_pool_size>32</background_schedule_pool_size>
     </clickhouse>
